@@ -62,7 +62,7 @@ function runTests(dbNumber) {
       }
 
       _suite.createSentinelClient = function (dbg) {
-        return RedisSentinel.createClient({
+        var client = RedisSentinel.createClient({
           sentinels: [
             ['127.0.0.1', 8379],
             ['127.0.0.1', 8380]
@@ -77,6 +77,16 @@ function runTests(dbNumber) {
             debug('ERROR', err)
           }
         })
+
+        if(dbNumber) {
+          client.once('reconnected', function() {
+            client.select(dbNumber, function(err) {
+              if(err) throw err
+            })
+          })
+        }
+
+        return client;
       }
 
     }); //setup

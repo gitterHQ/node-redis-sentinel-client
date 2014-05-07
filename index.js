@@ -10,7 +10,7 @@ var RedisSingleClient = require('redis'),
     to_array = require('redis/lib/to_array.js'),
     commands = require('redis/lib/commands'),
     debug = require('debug')('redis-sentinel-client');
-
+    client_call_commands = ['select'];
 
 /*
 options includes:
@@ -286,8 +286,7 @@ RedisSentinelClient.prototype.send_command = function (command, args, callback) 
 
 // adapted from index.js for RedisClient
 commands.forEach(function (command) {
-  RedisSentinelClient.prototype[command.toUpperCase()] =
-  RedisSentinelClient.prototype[command] = function (args, callback) {
+  function send_command(args, callback) {
     var sentinel = this;
 
     debug('command', command, args);
@@ -297,7 +296,24 @@ commands.forEach(function (command) {
     } else {
       return sentinel.send_command(command, to_array(arguments));
     }
-  };
+  }
+
+  function call_command() {
+    var sentinel = this;
+
+    // sentinel.debug('command', command, arguments)
+
+    // this ref needs to be totally atomic
+    var client = this.activeMasterClient;
+    return client[command].apply(client, arguments);
+  }
+
+  // Commands which require special processing in the redis-client and should therefore
+  // call the redisClient command directly
+  var call = client_call_commands.indexOf(command) >= 0;
+
+  RedisSentinelClient.prototype[command.toUpperCase()] =
+  RedisSentinelClient.prototype[command] = call ? call_command : send_command;
 });
 
 // Provide the SENTINEL command to our currently connected sentinel

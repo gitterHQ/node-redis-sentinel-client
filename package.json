@@ -4,7 +4,7 @@
   "description": "Transparent Redis Sentinel client",
   "main": "index.js",
   "scripts": {
-    "test": "./node_modules/.bin/mocha --ui tdd --reporter spec --bail test/test-full"
+    "test": "./node_modules/.bin/mocha --ui bdd --reporter spec --bail test/test-full"
   },
   "repository": {
     "type": "git",

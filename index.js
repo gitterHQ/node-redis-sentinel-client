@@ -301,7 +301,7 @@ commands.forEach(function (command) {
   function call_command() {
     var sentinel = this;
 
-    // sentinel.debug('command', command, arguments)
+    debug('command', command, arguments);
 
     // this ref needs to be totally atomic
     var client = this.activeMasterClient;

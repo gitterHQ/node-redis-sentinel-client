@@ -18,7 +18,7 @@ var assert = require('assert'),
 
 var ports = {
   redis1: 5379,
-  redis2: 5381,
+  redis2: 5380,
   sentinel1: 8379,
   sentinel2: 8380
 }

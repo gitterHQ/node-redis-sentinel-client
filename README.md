@@ -18,6 +18,7 @@ From the Sentinel docs:
 
 1. Transparent, drop-in replacement for RedisClient, handling connections to master, slave(s), and sentinel in the background.
 2. Handles all RedisClient operations (including pub/sub).
+3. Minimize data loss
 
 This was originally part of a [fork of node_redis](https://github.com/DocuSignDev/node_redis),
 and has been subsequently split to its own module.

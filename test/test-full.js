@@ -259,7 +259,7 @@ function runTests(dbNumber) {
       }
     })
 
-    it('should who is master', function (done) {
+    it('should return who is master', function (done) {
       _suite.clients.sentinel2.send_command('sentinel', ['get-master-addr-by-name', 'testmaster'], function (err, bulk) {
         assert.ifError(err)
         assert.equal(bulk[1], ports.redis1)
@@ -292,7 +292,7 @@ function runTests(dbNumber) {
       }
     })
 
-    it('should who is master', function (done) {
+    it('should return who is master', function (done) {
       _suite.clients.sentinelClient.sentinel(['get-master-addr-by-name', 'testmaster'], function (err, bulk) {
         assert.ifError(err)
         assert.equal(bulk[1], ports.redis2)
@@ -424,7 +424,6 @@ function runTests(dbNumber) {
       cli.rpush(key, j, function (err) {
         if (err) {
           debug('Error on continuity! ' + j + ': ' + err)
-        done(err)
           i--
         } else {
           debug('Sent continuity ' + j)

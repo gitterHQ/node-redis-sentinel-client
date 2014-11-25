@@ -1,6 +1,6 @@
 {
   "name": "gitter-redis-sentinel-client",
-  "version": "0.2.6",
+  "version": "0.2.7",
   "description": "Transparent Redis Sentinel client",
   "main": "index.js",
   "scripts": {

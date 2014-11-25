@@ -34,5 +34,8 @@
       "email": "derek.bredensteiner@docusign.com"
     }
   ],
-  "license": "MIT"
+  "license": "MIT",
+  "publishConfig": {
+    "registry": "http://beta-internal:8089/nexus/content/repositories/gitter-private/"
+  }
 }

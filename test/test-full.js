@@ -80,10 +80,8 @@ function runTests(dbNumber) {
         })
 
         if(dbNumber) {
-          client.once('reconnected', function() {
-            client.select(dbNumber, function(err) {
-              if(err) throw err
-            })
+          client.select(dbNumber, function(err) {
+            if(err) throw err
           })
         }
 

@@ -283,13 +283,41 @@ RedisSentinelClient.prototype._connect = function (port, host) {
 
 };
 
+RedisSentinelClient.prototype.queueCommand = function(args) {
+  // sentinel-client has yet to establish a connect to the master
+  if(!this.queuedCommands) {
+    this.queuedCommands = [args];
+
+    this.once('reconnected', function() {
+      var queuedCommands = this.queuedCommands;
+      delete this.queuedCommands;
+
+      if(queuedCommands) {
+        // Once reconnected occurs, activeMasterClient will exist
+        var client = this.activeMasterClient;
+
+        queuedCommands.forEach(function(q) {
+          return client.send_command.apply(client, q);
+        });
+      }
+    }.bind(this));
+  } else {
+    this.queuedCommands.push(args);
+  }
+};
+
 //
 // pass thru all client commands from RedisSentinelClient to activeMasterClient
 //
 RedisSentinelClient.prototype.send_command = function (command, args, callback) {
   // this ref needs to be totally atomic
   var client = this.activeMasterClient;
-  return client.send_command.apply(client, arguments);
+  if(client) {
+    return client.send_command.apply(client, arguments);
+  }
+
+  var argsArray = Array.prototype.slice.apply(arguments);
+  this.queueCommand(arguments);
 };
 
 // adapted from index.js for RedisClient

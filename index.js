@@ -2,6 +2,8 @@
 Redis Sentinel client, add-on for node_redis client.
 See readme for details/usage.
 */
+/* jshint node:true */
+'use strict';
 
 var RedisSingleClient = require('redis'),
     events = require('events'),
@@ -9,7 +11,7 @@ var RedisSingleClient = require('redis'),
     reply_to_object = require('redis/lib/util.js').reply_to_object,
     to_array = require('redis/lib/to_array.js'),
     commands = require('redis/lib/commands'),
-    debug = require('debug')('redis-sentinel-client');
+    debug = require('debug')('redis-sentinel-client'),
     client_call_commands = { select: 1 };
 
 /*
@@ -283,10 +285,13 @@ RedisSentinelClient.prototype._connect = function (port, host) {
 
 };
 
-RedisSentinelClient.prototype.queueCommand = function(args) {
+RedisSentinelClient.prototype.queueCommand = function(call, args) {
   // sentinel-client has yet to establish a connect to the master
+
+  var item = { call: call, args: args };
+
   if(!this.queuedCommands) {
-    this.queuedCommands = [args];
+    this.queuedCommands = [item];
 
     this.once('reconnected', function() {
       var queuedCommands = this.queuedCommands;
@@ -295,14 +300,24 @@ RedisSentinelClient.prototype.queueCommand = function(args) {
       if(queuedCommands) {
         // Once reconnected occurs, activeMasterClient will exist
         var client = this.activeMasterClient;
-
         queuedCommands.forEach(function(q) {
-          return client.send_command.apply(client, q);
+          var call = q.call;
+          var args = q.args;
+
+          if(call) {
+            var command = args.shift();
+
+            // Call the client
+            return client[command].apply(client, args);
+          } else {
+            // Use send_command
+            return client.send_command.apply(client, args);
+          }
         });
       }
     }.bind(this));
   } else {
-    this.queuedCommands.push(args);
+    this.queuedCommands.push(item);
   }
 };
 
@@ -316,8 +331,8 @@ RedisSentinelClient.prototype.send_command = function (command, args, callback) 
     return client.send_command.apply(client, arguments);
   }
 
-  var argsArray = Array.prototype.slice.apply(arguments);
-  this.queueCommand(arguments);
+  var argsArray = to_array(arguments);
+  this.queueCommand(false, arguments);
 };
 
 // adapted from index.js for RedisClient
@@ -334,14 +349,21 @@ commands.forEach(function (command) {
     }
   }
 
+  // Some special functions (like select) should be called using the actual
+  // method on the redis client, rather than simply passing them through
+  // to send_command, as they modify the state of the client.
   function call_command() {
     var sentinel = this;
 
     debug('command', command, arguments);
 
     // this ref needs to be totally atomic
-    var client = this.activeMasterClient;
-    return client[command].apply(client, arguments);
+    var client = sentinel.activeMasterClient;
+    if(client) {
+      return client[command].apply(client, arguments);
+    }
+
+    return sentinel.queueCommand(true, [command].concat(to_array(arguments)));
   }
 
   // Commands which require special processing in the redis-client and should therefore
@@ -361,7 +383,7 @@ RedisSentinelClient.prototype.SENTINEL =
     if (Array.isArray(args) && typeof callback === "function") {
       return this.sentinelTalker.send_command('sentinel', args, callback);
     } else {
-      return sentinel.sentinelTalker.send_command('sentinel', to_array(arguments));
+      return this.sentinelTalker.send_command('sentinel', to_array(arguments));
     }
   }
 

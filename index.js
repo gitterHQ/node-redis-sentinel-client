@@ -62,6 +62,7 @@ function RedisSentinelClient(options) {
   this.reconnectSentinel()
   this.on('sentinel disconnected', this.reconnectSentinel.bind(this))
 
+  this.on('failover start', this.disconnect.bind(this))
   this.on('switch master', this.reconnect.bind(this))
 }
 
@@ -189,6 +190,12 @@ RedisSentinelClient.prototype._connectSentinel = function (port, host) {
 
 }
 
+// In the event of a failover, disconnecting is the prudent thing to do
+// It allows an offline_queue to be built up and doesn't let the app think
+// that everything is hunky dory when it isnt
+RedisSentinelClient.prototype.disconnect = function disconnect() {
+  this.activeMasterClient.end()
+}
 
 // [re]connect activeMasterClient to the master.
 // destroys the previous connection and replaces w/ a new one,
@@ -251,7 +258,8 @@ RedisSentinelClient.prototype._connect = function (port, host) {
         selected_db: self.activeMasterClient.selected_db || null,
       }
     }
-    thisClient.subscription_set = self.activeMasterClient && self.activeMasterClient.subscription_set || {}
+    thisClient.subscription_set = self.activeMasterClient.subscription_set || {}
+    thisClient.offline_queue = self.activeMasterClient.offline_queue
   }
 
   self.activeMasterClient = thisClient;
@@ -301,7 +309,7 @@ commands.forEach(function (command) {
   function call_command() {
     var sentinel = this;
 
-    // sentinel.debug('command', command, arguments)
+    debug('command', command, arguments);
 
     // this ref needs to be totally atomic
     var client = this.activeMasterClient;

@@ -1,6 +1,6 @@
 {
   "name": "redis-sentinel-client",
-  "version": "0.2.4a",
+  "version": "0.2.5a",
   "description": "Transparent Redis Sentinel client",
   "main": "index.js",
   "scripts": {

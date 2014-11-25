@@ -3,7 +3,7 @@ test a failover scenario
 should lose no data (atomic set/get or pub/sub) during the failover.
 
 to use this,
-  - ./node_modules/.bin/mocha --ui bdd --reporter spec --bail test/test-full
+  - ./node_modules/.bin/mocha --ui tdd --reporter spec --bail test/test-full
 */
 
 var assert = require('assert'),
@@ -33,8 +33,9 @@ function runTests(dbNumber) {
 
   return function() {
 
+    // (want setup to run once, using BDD-style `before`)
     before(function (done) {
-      _suite = { };
+      _suite = {};
 
       _suite.hashKey = "test-sentinel-" + Math.round(Math.random() * 1000000);
       _suite.key = function (s) { return _suite.hashKey + ":" + s }
@@ -62,7 +63,7 @@ function runTests(dbNumber) {
       }
 
       _suite.createSentinelClient = function (dbg) {
-        return RedisSentinel.createClient({
+        var client = RedisSentinel.createClient({
           sentinels: [
             ['127.0.0.1', 8379],
             ['127.0.0.1', 8380]
@@ -77,22 +78,32 @@ function runTests(dbNumber) {
             debug('ERROR', err)
           }
         })
+
+        if(dbNumber) {
+          client.once('reconnected', function() {
+            client.select(dbNumber, function(err) {
+              if(err) throw err
+            })
+          })
+        }
+
+        return client;
       }
 
     }); //setup
 
 
-    it('should fire the ready event on master', function (done) {
+    it('should redis master is ready', function (done) {
       var cli = _suite.clients.redis1
       cli.ready ? done() : cli.once('ready', done)
     })
 
-    it('should fire the ready event on the slave', function (done) {
+    it('should redis slave is ready', function (done) {
       var cli = _suite.clients.redis2
       cli.ready ? done() : cli.once('ready', done)
     })
 
-    it('should check that redis slaveof is working', function (done) {
+    it('should redis slaveof is working', function (done) {
       var cli1 = _suite.clients.redis1
         , cli2 = _suite.clients.redis2
 
@@ -111,17 +122,17 @@ function runTests(dbNumber) {
       })
     })
 
-    it('should fire the ready event on sentinel1', function (done) {
+    it('should sentinel1 ready', function (done) {
       var cli = _suite.clients.sentinel1
       cli.ready ? done() : cli.once('ready', done)
     })
 
-    it('should fire the ready event on sentinel2', function (done) {
+    it('should sentinel ready', function (done) {
       var cli = _suite.clients.sentinel2
       cli.ready ? done() : cli.once('ready', done)
     })
 
-    it('should check that sentinel1 is monitoring redis', function (done) {
+    it('should sentinel1 monitor redis', function (done) {
       var cli = _suite.clients.sentinel1
       cli.send_command('sentinel', ['master', 'testmaster'], function (err) {
         assert.ifError(err)
@@ -129,7 +140,7 @@ function runTests(dbNumber) {
       })
     })
 
-    it('should check that sentinel2 is monitoring redis', function (done) {
+    it('should sentinel2 monitor redis', function (done) {
       var cli = _suite.clients.sentinel2
       cli.send_command('sentinel', ['master', 'testmaster'], function (err) {
         assert.ifError(err)
@@ -140,9 +151,12 @@ function runTests(dbNumber) {
     it('should setup sentinel client', function (done) {
       var cli = _suite.clients.sentinelClient = _suite.createSentinelClient()
       cli.on('error', function (err) {
-        console.log('Error in sentinel client:', err)
+        console.log('Error in sentinel client:', err.stack || err)
       })
-      cli.once('ready', done)
+      cli.once('ready', function (err) {
+        done(err)
+        startContinuity(cli)
+      })
     })
 
     it('should setup sentinel pubsub', function (done) {
@@ -168,7 +182,7 @@ function runTests(dbNumber) {
 
     it('should use sentinel client after ready', testSentinelClient)
 
-    it('who is master', function (done) {
+    it('should who is master', function (done) {
       _suite.clients.sentinel1.send_command('sentinel', ['get-master-addr-by-name', 'testmaster'], function (err, bulk) {
         assert.ifError(err)
         assert.equal(bulk[1], ports.redis1)
@@ -196,7 +210,7 @@ function runTests(dbNumber) {
       }
     })
 
-    it('should return who is master', function (done) {
+    it('should who is master', function (done) {
       _suite.clients.sentinel1.send_command('sentinel', ['get-master-addr-by-name', 'testmaster'], function (err, bulk) {
         assert.ifError(err)
         assert.equal(bulk[1], ports.redis2)
@@ -206,7 +220,7 @@ function runTests(dbNumber) {
 
     it('should use sentinel client after failover', testSentinelClient)
 
-    it('should propogate configuration', function (done) {
+    it('should configuration propogation', function (done) {
       this.timeout(4000)
       setTimeout(function () {
         _suite.clients.sentinel2.send_command('sentinel', ['get-master-addr-by-name', 'testmaster'], function (err, bulk) {
@@ -222,8 +236,8 @@ function runTests(dbNumber) {
     })
 
     it('should kill master', function (done) {
-      this.timeout(30000)
-      setTimeout(onTimeout, 4000)
+      this.timeout(40000)
+      setTimeout(onTimeout, 10000)
 
       var done4 = donen(4, done)
       _suite.clients.sentinelClient.once('switch master', done4).once('ready', done4)
@@ -236,6 +250,7 @@ function runTests(dbNumber) {
 
       function onTimeout() {
         _suite.clients.redis2.end()
+
         _suite.processes.redis2.kill()
         delete(_suite.clients.redis2)
         delete(_suite.processes.redis2)
@@ -320,11 +335,16 @@ function runTests(dbNumber) {
       })
     })
 
+    it('should test continuity through whole test', function (done) {
+      testContinuity(_suite.clients.sentinelClient, done)
+    })
+
     after(function (done) {
       Object.keys(_suite.clients).forEach(function (cli) { _suite.clients[cli].end() })
       Object.keys(_suite.processes).forEach(function (proc) { _suite.processes[proc].kill() })
       setTimeout(done, 1000)
     })
+
   }
 
 
@@ -333,6 +353,18 @@ function runTests(dbNumber) {
     Object.keys(_suite.processes).forEach(function (proc) { _suite.processes[proc].kill() })
   })
 
+  function donen(n, done) {
+    var cnt = 0
+    return function (err) {
+      cnt++
+      if (err && cnt <= n) {
+        cnt = n
+        done(err)
+      } else if (cnt === n) {
+        done()
+      }
+    }
+  }
 
   function testSentinelClient(done) {
     async.parallel([
@@ -383,18 +415,31 @@ function runTests(dbNumber) {
     })
     pub.publish(_suite.key('counter'), val, assert.ifError)
   }
-}
 
-
-function donen(n, done) {
-  var cnt = 0
-  return function (err) {
-    cnt++
-    if (err && cnt <= n) {
-      cnt = n
-      done(err)
-    } else if (cnt === n) {
-      done()
-    }
+  function startContinuity(cli) {
+    var key = _suite.key('continuity')
+      , i = 1
+    setInterval(function () {
+      var j = i++
+      cli.rpush(key, j, function (err) {
+        if (err) {
+          debug('Error on continuity! ' + j + ': ' + err)
+          i--
+        } else {
+          debug('Sent continuity ' + j)
+      }
+      })
+    }, 300)
   }
+
+  function testContinuity(cli, cb) {
+    cli.lrange(_suite.key('continuity'), 0, -1, function (err, data) {
+      debug('continuity received ' + JSON.stringify(data))
+      assert.ifError(err)
+      assert.ok(data.length > 0)
+      assert.deepEqual(data, Array.apply(null, Array(data.length)).map(function (_,i) { return ''+(i+1) }))
+      cb()
+    })
+  }
+
 }

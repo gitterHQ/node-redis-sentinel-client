@@ -76,6 +76,21 @@ suite('sentinel full', function () {
 
   }); //setup
 
+  test('commands issues before master connection is established', function (done) {
+    var cli = _suite.createSentinelClient()
+    var d = Date.now();
+
+    cli.set('before.connection', d, function(err) {
+      assert.ifError(err)
+
+      cli.get('before.connection', function(err, value) {
+        assert.ifError(err)
+        assert.equal(value, d)
+        done()
+      });
+    });
+
+  })
 
   test('redis master is ready', function (done) {
     var cli = _suite.clients.redis1

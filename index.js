@@ -10,7 +10,7 @@ var RedisSingleClient = require('redis'),
     to_array = require('redis/lib/to_array.js'),
     commands = require('redis/lib/commands'),
     debug = require('debug')('redis-sentinel-client');
-    client_call_commands = ['select'];
+    client_call_commands = { select: 1 };
 
 /*
 options includes:
@@ -318,7 +318,7 @@ commands.forEach(function (command) {
 
   // Commands which require special processing in the redis-client and should therefore
   // call the redisClient command directly
-  var call = client_call_commands.indexOf(command) >= 0;
+  var call = client_call_commands[command];
 
   RedisSentinelClient.prototype[command.toUpperCase()] =
   RedisSentinelClient.prototype[command] = call ? call_command : send_command;

@@ -393,13 +393,33 @@ RedisSentinelClient.prototype.SENTINEL =
 // this multi is on the master client, so don't hold onto it too long!
 var Multi = RedisSingleClient.Multi;
 
-// @todo make a SentinelMulti that queues within the sentinel client?
-//  would need to handle all Multi.prototype methods, etc.
-//  for now let multi's queue die if the master dies.
+function RedisSentinelMulti(sentinel, args) {
+  Multi.call(this, null, args);
+  this.sentinel = sentinel;
+}
+util.inherits(RedisSentinelMulti, Multi);
+
+RedisSentinelMulti.prototype.exec = function(callback) {
+  var sentinel = this.sentinel;
+
+  var executeWithClient = function(client) {
+    this._client = client;
+    Multi.prototype.exec.call(this, callback);
+  }.bind(this);
+
+  if(sentinel.activeMasterClient) {
+    executeWithClient(sentinel.activeMasterClient);
+  } else {
+    sentinel.once('reconnected', function() {
+      executeWithClient(sentinel.activeMasterClient);
+    });
+  }
+
+}
 
 RedisSentinelClient.prototype.multi =
 RedisSentinelClient.prototype.MULTI = function (args) {
-  return new Multi(this.activeMasterClient, args);
+  return new RedisSentinelMulti(this, args);
 };
 
 ['hmget', 'hmset', 'done'].forEach(function(staticProp){

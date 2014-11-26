@@ -105,6 +105,20 @@ function runTests(dbNumber) {
 
     })
 
+    it('should allow multi commands issued before master connection is established', function (done) {
+      var cli = _suite.createSentinelClient()
+      var d = Date.now();
+
+      cli.multi()
+        .set('multi.test', d)
+        .get('multi.test')
+        .exec(function(err, results) {
+          assert.ifError(err)
+          assert.equal(results[1], d)
+          done();
+        });
+
+    })
 
     it('should redis master is ready', function (done) {
       var cli = _suite.clients.redis1
@@ -248,6 +262,13 @@ function runTests(dbNumber) {
       _suite.clients.sentinel2.send_command('sentinel',['set', 'testmaster', 'down-after-milliseconds', 1000], done)
     })
 
+    it('should create multi objects', function(done) {
+      _suite.multiValue = Date.now();
+      _suite.multi = _suite.clients.sentinelClient.multi()
+            .set('multi.across.masters', _suite.multiValue);
+      done();
+    });
+
     it('should kill master', function (done) {
       this.timeout(40000)
       setTimeout(onTimeout, 10000)
@@ -271,6 +292,16 @@ function runTests(dbNumber) {
         debug('redis master killed')
       }
     })
+
+    it('should allow exec multi', function(done) {
+      _suite.multi
+            .get('multi.across.masters')
+            .exec(function(err, results) {
+              assert.ifError(err)
+              assert.equal(results[1], _suite.multiValue);
+              done();
+            })
+    });
 
     it('should return who is master', function (done) {
       _suite.clients.sentinel2.send_command('sentinel', ['get-master-addr-by-name', 'testmaster'], function (err, bulk) {

@@ -76,7 +76,7 @@ suite('sentinel full', function () {
 
   }); //setup
 
-  test('commands issues before master connection is established', function (done) {
+  test('commands issued before master connection is established', function (done) {
     var cli = _suite.createSentinelClient()
     var d = Date.now();
 
@@ -89,6 +89,21 @@ suite('sentinel full', function () {
         done()
       });
     });
+
+  })
+
+  test('multi commands issued before master connection is established', function (done) {
+    var cli = _suite.createSentinelClient()
+    var d = Date.now();
+
+    cli.multi()
+      .set('multi.test', d)
+      .get('multi.test')
+      .exec(function(err, results) {
+        assert.ifError(err)
+        assert.equal(results[1], d)
+        done();
+      });
 
   })
 
@@ -234,6 +249,13 @@ suite('sentinel full', function () {
     _suite.clients.sentinel2.send_command('sentinel',['set', 'testmaster', 'down-after-milliseconds', 1000], done)
   })
 
+  test('create multi', function(done) {
+    _suite.multiValue = Date.now();
+    _suite.multi = _suite.clients.sentinelClient.multi()
+          .set('multi.across.masters', _suite.multiValue);
+    done();
+  });
+
   test('kill master', function (done) {
     this.timeout(40000)
     setTimeout(onTimeout, 10000)
@@ -256,6 +278,16 @@ suite('sentinel full', function () {
       debug('redis master killed')
     }
   })
+
+  test('exec multi', function(done) {
+    _suite.multi
+          .get('multi.across.masters')
+          .exec(function(err, results) {
+            assert.ifError(err)
+            assert.equal(results[1], _suite.multiValue);
+            done();
+          })
+  });
 
   test('who is master', function (done) {
     _suite.clients.sentinel2.send_command('sentinel', ['get-master-addr-by-name', 'testmaster'], function (err, bulk) {

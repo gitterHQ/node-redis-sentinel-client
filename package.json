@@ -1,5 +1,5 @@
 {
-  "name": "gitter-redis-sentinel-client",
+  "name": "@gitterhq/redis-sentinel-client",
   "version": "0.3.0",
   "description": "Transparent Redis Sentinel client",
   "main": "index.js",
